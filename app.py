@@ -48,7 +48,9 @@ def send_email(file_path, filename, compra_data):
         
     venc_str = ""
     if compra_data.get('vencimento'):
-        venc_str = f"    - Vencimento: {compra_data['vencimento']}\\n"
+        venc_str = f"    - Vencimento: {compra_data['vencimento']}\n"
+        
+    adto_str = "Sim" if adto else "NÃO"
 
     corpo_email = f"""
     Olá,
@@ -56,6 +58,7 @@ def send_email(file_path, filename, compra_data):
     Uma nova Nota Fiscal foi enviada no sistema.
     
     Detalhes da Compra:
+    - ADTO: {adto_str}
     - Loja: {compra_data['loja']}
     - Valor da Compra: R$ {compra_data['valor_compra']}
 {venc_str}    - Centro de Custo: {compra_data['centro_custo']}
@@ -71,15 +74,30 @@ def send_email(file_path, filename, compra_data):
     msg['To'] = destinatario
     msg.set_content(corpo_email)
     
-    # Anexar arquivo
+    # Anexar arquivo(s)
     try:
-        with open(file_path, 'rb') as f:
-            file_data = f.read()
-            mime_type, _ = mimetypes.guess_type(filename)
-            if mime_type is None:
-                mime_type = 'application/octet-stream'
-            maintype, subtype = mime_type.split('/', 1)
-            msg.add_attachment(file_data, maintype=maintype, subtype=subtype, filename=filename)
+        filenames = filename.split('|')
+        for idx, fname in enumerate(filenames):
+            if not fname: continue
+            f_path = os.path.join(app.config['UPLOAD_FOLDER'], fname)
+            if os.path.exists(f_path):
+                with open(f_path, 'rb') as f:
+                    file_data = f.read()
+                    mime_type, _ = mimetypes.guess_type(fname)
+                    if mime_type is None:
+                        mime_type = 'application/octet-stream'
+                    maintype, subtype = mime_type.split('/', 1)
+                    
+                    # Manter apenas o prefixo (nf_id ou boleto_id) e descartar o nome original
+                    parts = fname.split('_', 2)
+                    ext = os.path.splitext(fname)[1]
+                    if len(parts) == 3 and parts[0] in ['nf', 'boleto']:
+                        suffix = f"_{idx+1}" if len(filenames) > 1 else ""
+                        attachment_name = f"{parts[0]}_{parts[1]}{suffix}{ext}"
+                    else:
+                        attachment_name = fname
+                    
+                    msg.add_attachment(file_data, maintype=maintype, subtype=subtype, filename=attachment_name)
             
         if smtp_user and smtp_password:
             with smtplib.SMTP(smtp_server, smtp_port) as server:
@@ -144,11 +162,11 @@ def get_compras():
 def add_compra():
     if request.content_type.startswith('multipart/form-data'):
         data = request.form
-        nf_file = request.files.get('arquivo_nf')
+        nf_files = request.files.getlist('arquivo_nf')
         boleto_file = request.files.get('arquivo_boleto')
     else:
         data = request.json
-        nf_file = None
+        nf_files = []
         boleto_file = None
 
     try:
@@ -173,9 +191,14 @@ def add_compra():
         filename_nf = None
         filename_boleto = None
         
-        if nf_file and nf_file.filename != '':
-            filename_nf = f"nf_{compra_id}_{nf_file.filename}"
-            nf_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename_nf))
+        filename_nf_list = []
+        for f in nf_files:
+            if f and f.filename != '':
+                fn = f"nf_{compra_id}_{f.filename}"
+                f.save(os.path.join(app.config['UPLOAD_FOLDER'], fn))
+                filename_nf_list.append(fn)
+        if filename_nf_list:
+            filename_nf = '|'.join(filename_nf_list)
             
         if boleto_file and boleto_file.filename != '':
             filename_boleto = f"boleto_{compra_id}_{boleto_file.filename}"
@@ -224,11 +247,11 @@ def add_compra():
 def edit_compra(compra_id):
     if request.content_type.startswith('multipart/form-data'):
         data = request.form
-        nf_file = request.files.get('arquivo_nf')
+        nf_files = request.files.getlist('arquivo_nf')
         boleto_file = request.files.get('arquivo_boleto')
     else:
         data = request.json
-        nf_file = None
+        nf_files = []
         boleto_file = None
 
     try:
@@ -254,9 +277,14 @@ def edit_compra(compra_id):
         filename_nf = None
         filename_boleto = None
         
-        if nf_file and nf_file.filename != '':
-            filename_nf = f"nf_{compra_id}_{nf_file.filename}"
-            nf_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename_nf))
+        filename_nf_list = []
+        for f in nf_files:
+            if f and f.filename != '':
+                fn = f"nf_{compra_id}_{f.filename}"
+                f.save(os.path.join(app.config['UPLOAD_FOLDER'], fn))
+                filename_nf_list.append(fn)
+        if filename_nf_list:
+            filename_nf = '|'.join(filename_nf_list)
             cursor.execute('UPDATE compras SET arquivo_nf = ? WHERE id = ?', (filename_nf, compra_id))
             
         if boleto_file and boleto_file.filename != '':
@@ -382,10 +410,21 @@ def upload_nf(compra_id):
     if not numero_nf or not data_recebimento:
         return jsonify({'error': 'Número da NF e Data são obrigatórios'}), 400
         
-    # Salvar arquivo
-    filename = f"nf_{compra_id}_{file.filename}"
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(file_path)
+    # Salvar arquivos
+    nf_files = request.files.getlist('nf_file')
+    filename_nf_list = []
+    for f in nf_files:
+        if f and f.filename != '':
+            fn = f"nf_{compra_id}_{f.filename}"
+            f_path = os.path.join(app.config['UPLOAD_FOLDER'], fn)
+            f.save(f_path)
+            filename_nf_list.append(fn)
+            
+    if not filename_nf_list:
+        return jsonify({'error': 'Nenhum arquivo válido enviado'}), 400
+        
+    filename = '|'.join(filename_nf_list)
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename_nf_list[0]) # Path is practically unused directly for multiples in email, but keeping for compatibility
     
     # Atualizar banco de dados
     conn = get_db()
@@ -449,13 +488,16 @@ def enviar_emails_manuais():
                 
                 venc_str = ""
                 if compra.get('vencimento'):
-                    venc_str = f"- Vencimento: {compra['vencimento']}\\n"
+                    venc_str = f"- Vencimento: {compra['vencimento']}\n"
+                    
+                adto_str = "Sim" if compra.get('adto') else "NÃO"
                     
                 corpo_email = f"""
 Olá,
 
 Seguem os detalhes da compra:
 
+- ADTO: {adto_str}
 - Loja: {compra['loja']}
 - Valor da Compra: R$ {compra['valor_compra']}
 {venc_str}- Centro de Custo: {compra['centro_custo']}
@@ -472,17 +514,28 @@ Os arquivos anexos (se houver) acompanham este e-mail.
                 msg['To'] = ", ".join(emails)
                 msg.set_content(corpo_email)
                 
-                # Anexar NF
+                # Anexar NF(s)
                 if compra.get('arquivo_nf'):
-                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], compra['arquivo_nf'])
-                    if os.path.exists(file_path):
-                        with open(file_path, 'rb') as f:
-                            filename = compra['arquivo_nf']
-                            mime_type, _ = mimetypes.guess_type(filename)
-                            if mime_type is None:
-                                mime_type = 'application/octet-stream'
-                            maintype, subtype = mime_type.split('/', 1)
-                            msg.add_attachment(f.read(), maintype=maintype, subtype=subtype, filename=filename)
+                    filenames = compra['arquivo_nf'].split('|')
+                    for idx, fname in enumerate(filenames):
+                        if not fname: continue
+                        file_path = os.path.join(app.config['UPLOAD_FOLDER'], fname)
+                        if os.path.exists(file_path):
+                            with open(file_path, 'rb') as f:
+                                mime_type, _ = mimetypes.guess_type(fname)
+                                if mime_type is None:
+                                    mime_type = 'application/octet-stream'
+                                maintype, subtype = mime_type.split('/', 1)
+                                
+                                parts = fname.split('_', 2)
+                                ext = os.path.splitext(fname)[1]
+                                if len(parts) == 3 and parts[0] in ['nf', 'boleto']:
+                                    suffix = f"_{idx+1}" if len(filenames) > 1 else ""
+                                    attachment_name = f"{parts[0]}_{parts[1]}{suffix}{ext}"
+                                else:
+                                    attachment_name = fname
+                                
+                                msg.add_attachment(f.read(), maintype=maintype, subtype=subtype, filename=attachment_name)
                 
                 # Anexar Boleto
                 if compra.get('arquivo_boleto'):
@@ -494,7 +547,15 @@ Os arquivos anexos (se houver) acompanham este e-mail.
                             if mime_type is None:
                                 mime_type = 'application/octet-stream'
                             maintype, subtype = mime_type.split('/', 1)
-                            msg.add_attachment(f.read(), maintype=maintype, subtype=subtype, filename=filename)
+                            
+                            parts = filename.split('_', 2)
+                            ext = os.path.splitext(filename)[1]
+                            if len(parts) == 3 and parts[0] in ['nf', 'boleto']:
+                                attachment_name = f"{parts[0]}_{parts[1]}{ext}"
+                            else:
+                                attachment_name = filename
+                            
+                            msg.add_attachment(f.read(), maintype=maintype, subtype=subtype, filename=attachment_name)
                             
                 server.send_message(msg)
                 sucesso_count += 1

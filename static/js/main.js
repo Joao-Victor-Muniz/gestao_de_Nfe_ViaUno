@@ -144,6 +144,7 @@ function renderizarTabela(compras) {
 function abrirModalNf(id) {
     document.getElementById("compra_id").value = id;
     document.getElementById("form-upload-nf").reset();
+    document.querySelectorAll('#form-upload-nf .file-list-container').forEach(el => el.innerHTML = '');
     
     // Setar a data atual como padrão no campo data de recebimento
     document.getElementById("data_recebimento").valueAsDate = new Date();
@@ -208,6 +209,7 @@ function handleUploadSubmit(e) {
 
 function abrirModalNovaCompra() {
     document.getElementById("form-nova-compra").reset();
+    document.querySelectorAll('#form-nova-compra .file-list-container').forEach(el => el.innerHTML = '');
     
     if(!modalNovaCompra) {
         modalNovaCompra = new bootstrap.Modal(document.getElementById('novaCompraModal'));
@@ -549,6 +551,7 @@ function abrirModalEditarCompra(id) {
     form.querySelector('#edit_descricao').value = compra.descricao || '';
     form.querySelector('#edit_numero_nf').value = compra.numero_nf || '';
     form.querySelector('#edit_vencimento').value = compra.vencimento ? compra.vencimento.split('T')[0] : '';
+    form.querySelectorAll('.file-list-container').forEach(el => el.innerHTML = '');
     
     if(!modalEditarCompra) {
         modalEditarCompra = new bootstrap.Modal(document.getElementById('editarCompraModal'));
@@ -738,4 +741,18 @@ function excluirCentroCusto(id, nome) {
     });
 }
 
-
+function mostrarArquivos(inputElement) {
+    let container = inputElement.nextElementSibling;
+    if (!container || !container.classList.contains('file-list-container')) {
+        container = inputElement.parentElement.nextElementSibling;
+    }
+    
+    if (!container || !container.classList.contains('file-list-container')) return;
+    
+    container.innerHTML = '';
+    
+    if (inputElement.files && inputElement.files.length > 0) {
+        const fileNames = Array.from(inputElement.files).map(file => `<div class="text-truncate"><i class="fas fa-file-alt me-1"></i>${file.name}</div>`);
+        container.innerHTML = fileNames.join('');
+    }
+}
