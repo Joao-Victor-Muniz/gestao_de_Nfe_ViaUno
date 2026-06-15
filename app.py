@@ -220,6 +220,69 @@ def add_compra():
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
+@app.route('/api/compras/<int:compra_id>', methods=['PUT'])
+def edit_compra(compra_id):
+    if request.content_type.startswith('multipart/form-data'):
+        data = request.form
+        nf_file = request.files.get('arquivo_nf')
+        boleto_file = request.files.get('arquivo_boleto')
+    else:
+        data = request.json
+        nf_file = None
+        boleto_file = None
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        vencimento = data.get('vencimento') or None
+        
+        cursor.execute('''
+            UPDATE compras
+            SET data_compra = ?, loja = ?, valor_compra = ?, centro_custo = ?, adto = ?, descricao = ?, vencimento = ?
+            WHERE id = ?
+        ''', (
+            data['data_compra'],
+            data['loja'],
+            data['valor_compra'],
+            data['centro_custo'],
+            1 if str(data.get('adto')).lower() in ['true', '1'] else 0,
+            data.get('descricao', ''),
+            vencimento,
+            compra_id
+        ))
+        
+        filename_nf = None
+        filename_boleto = None
+        
+        if nf_file and nf_file.filename != '':
+            filename_nf = f"nf_{compra_id}_{nf_file.filename}"
+            nf_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename_nf))
+            cursor.execute('UPDATE compras SET arquivo_nf = ? WHERE id = ?', (filename_nf, compra_id))
+            
+        if boleto_file and boleto_file.filename != '':
+            filename_boleto = f"boleto_{compra_id}_{boleto_file.filename}"
+            boleto_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename_boleto))
+            cursor.execute('UPDATE compras SET arquivo_boleto = ? WHERE id = ?', (filename_boleto, compra_id))
+            
+        numero_nf = data.get('numero_nf')
+        if numero_nf is not None:
+            cursor.execute('UPDATE compras SET numero_nf = ? WHERE id = ?', (numero_nf, compra_id))
+
+        # Update status if needed based on the new NF number
+        cursor.execute('SELECT arquivo_nf, numero_nf FROM compras WHERE id = ?', (compra_id,))
+        row = cursor.fetchone()
+        if row:
+            has_nf_file = bool(row['arquivo_nf'])
+            has_nf_num = bool(row['numero_nf'])
+            new_status = 'Concluido' if has_nf_file or has_nf_num else 'Pendente'
+            cursor.execute('UPDATE compras SET status = ? WHERE id = ?', (new_status, compra_id))
+
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Compra atualizada com sucesso!'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
 @app.route('/api/compras/<int:compra_id>', methods=['DELETE'])
 def delete_compra(compra_id):
     try:
@@ -251,6 +314,56 @@ def add_loja():
         return jsonify({'message': 'Loja adicionada com sucesso!', 'id': loja_id, 'nome': data['nome'].strip()}), 201
     except sqlite3.IntegrityError:
         return jsonify({'error': 'Loja já cadastrada'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/centros_custo', methods=['GET'])
+def get_centros_custo():
+    conn = get_db()
+    centros = conn.execute('SELECT * FROM centros_custo ORDER BY nome').fetchall()
+    conn.close()
+    return jsonify([dict(ix) for ix in centros])
+
+@app.route('/api/centros_custo', methods=['POST'])
+def add_centro_custo():
+    data = request.json
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO centros_custo (nome) VALUES (?)', (data['nome'].strip(),))
+        conn.commit()
+        centro_id = cursor.lastrowid
+        conn.close()
+        return jsonify({'message': 'Centro de Custo adicionado!', 'id': centro_id, 'nome': data['nome'].strip()}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'Centro de custo já cadastrado'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/centros_custo/<int:centro_id>', methods=['PUT'])
+def edit_centro_custo_api(centro_id):
+    data = request.json
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('UPDATE centros_custo SET nome = ? WHERE id = ?', (data['nome'].strip(), centro_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Atualizado com sucesso!'}), 200
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'Já existe outro centro com esse nome'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/centros_custo/<int:centro_id>', methods=['DELETE'])
+def delete_centro_custo_api(centro_id):
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM centros_custo WHERE id = ?', (centro_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Centro de custo deletado com sucesso!'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 

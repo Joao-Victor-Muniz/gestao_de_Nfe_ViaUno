@@ -9,6 +9,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const formNovaCompra = document.getElementById("form-nova-compra");
     formNovaCompra.addEventListener("submit", handleNovaCompraSubmit);
 
+    // Configurar o formulário de editar compra
+    const formEditarCompra = document.getElementById("form-editar-compra");
+    if(formEditarCompra) formEditarCompra.addEventListener("submit", handleEditarCompraSubmit);
+
     // Configurar o formulário de nova loja
     const formNovaLoja = document.getElementById("form-nova-loja");
     if(formNovaLoja) formNovaLoja.addEventListener("submit", handleNovaLojaSubmit);
@@ -19,12 +23,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const formEmails = document.getElementById("form-enviar-emails");
     if(formEmails) formEmails.addEventListener("submit", handleEnviarEmailsSubmit);
     
+    const formNovoCentro = document.getElementById("form-novo-centro");
+    if(formNovoCentro) formNovoCentro.addEventListener("submit", handleNovoCentroSubmit);
+    
     carregarLojas();
+    carregarCentrosCusto();
 });
 
 let todasCompras = [];
 let modalUpload;
 let modalNovaCompra;
+let modalEditarCompra;
 let modalConfig;
 let modalEmails;
 let ordemInvertida = false;
@@ -118,6 +127,9 @@ function renderizarTabela(compras) {
                             <i class="fas fa-check-double"></i>
                         </button>
                     `}
+                    <button class="btn btn-sm btn-outline-warning fw-bold shadow-sm" onclick="abrirModalEditarCompra(${compra.id})" title="Editar Compra">
+                        <i class="fas fa-edit"></i>
+                    </button>
                     <button class="btn btn-sm btn-outline-danger fw-bold shadow-sm" onclick="excluirCompra(${compra.id})" title="Remover Compra">
                         <i class="fas fa-trash-alt"></i>
                     </button>
@@ -515,3 +527,215 @@ function handleEnviarEmailsSubmit(e) {
         btnSubmit.disabled = false;
     });
 }
+
+function abrirModalEditarCompra(id) {
+    const compra = todasCompras.find(c => c.id === id);
+    if(!compra) return;
+    
+    document.getElementById('edit_compra_id').value = compra.id;
+    
+    const form = document.getElementById('form-editar-compra');
+    form.querySelector('#edit_data_compra').value = compra.data_compra ? compra.data_compra.split('T')[0] : '';
+    form.querySelector('#edit_valor_compra').value = compra.valor_compra;
+    
+    const selectLoja = form.querySelector('#edit_select_loja');
+    if (selectLoja) {
+        selectLoja.innerHTML = document.getElementById('select-loja').innerHTML;
+        selectLoja.value = compra.loja;
+    }
+    
+    form.querySelector('#edit_centro_custo').value = compra.centro_custo;
+    form.querySelector('#edit_adtoSwitch').checked = !!compra.adto;
+    form.querySelector('#edit_descricao').value = compra.descricao || '';
+    form.querySelector('#edit_numero_nf').value = compra.numero_nf || '';
+    form.querySelector('#edit_vencimento').value = compra.vencimento ? compra.vencimento.split('T')[0] : '';
+    
+    if(!modalEditarCompra) {
+        modalEditarCompra = new bootstrap.Modal(document.getElementById('editarCompraModal'));
+    }
+    modalEditarCompra.show();
+}
+
+function handleEditarCompraSubmit(e) {
+    e.preventDefault();
+    
+    const form = e.target;
+    const formData = new FormData(form);
+    
+    formData.set('adto', form.querySelector('#edit_adtoSwitch').checked ? 'true' : 'false');
+    
+    const btnSubmit = form.querySelector('button[type="submit"]');
+    const txtOriginal = btnSubmit.innerHTML;
+    btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvando...';
+    btnSubmit.disabled = true;
+    
+    const id = formData.get('id');
+    
+    fetch(`/api/compras/${id}`, {
+        method: 'PUT',
+        body: formData
+    })
+    .then(response => response.json().then(resData => ({ status: response.status, body: resData })))
+    .then(result => {
+        if (result.status === 200) {
+            modalEditarCompra.hide();
+            Swal.fire({
+                icon: 'success',
+                title: 'Compra Atualizada!',
+                text: 'As alterações foram salvas.',
+                confirmButtonColor: '#ffc107'
+            });
+            carregarCompras();
+        } else {
+            Swal.fire('Erro', result.body.error || 'Erro ao atualizar.', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        Swal.fire('Erro Interno', 'Falha na comunicação com o servidor.', 'error');
+    })
+    .finally(() => {
+        btnSubmit.innerHTML = txtOriginal;
+        btnSubmit.disabled = false;
+    });
+}
+
+let modalCentroCusto;
+
+function carregarCentrosCusto() {
+    fetch('/api/centros_custo')
+        .then(response => response.json())
+        .then(data => {
+            const selects = [document.getElementById('select-centro'), document.getElementById('edit_centro_custo')];
+            selects.forEach(select => {
+                if(select) {
+                    const val = select.value;
+                    select.innerHTML = '<option value="">Selecione...</option>';
+                    data.forEach(centro => {
+                        const option = document.createElement('option');
+                        option.value = centro.nome;
+                        option.textContent = centro.nome;
+                        select.appendChild(option);
+                    });
+                    if (val) select.value = val;
+                }
+            });
+            
+            const ul = document.getElementById('lista-centros');
+            if (ul) {
+                ul.innerHTML = '';
+                data.forEach(centro => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item d-flex justify-content-between align-items-center p-2';
+                    li.innerHTML = `
+                        <span class="fw-bold text-secondary">${centro.nome}</span>
+                        <div>
+                            <button class="btn btn-sm btn-outline-warning shadow-sm me-1" onclick="editarNomeCentro(${centro.id}, '${centro.nome}')" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger shadow-sm" onclick="excluirCentroCusto(${centro.id}, '${centro.nome}')" title="Excluir">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    `;
+                    ul.appendChild(li);
+                });
+            }
+        })
+        .catch(error => console.error('Erro ao carregar centros de custo:', error));
+}
+
+function abrirModalCentroCusto() {
+    document.getElementById("form-novo-centro").reset();
+    if(!modalCentroCusto) {
+        modalCentroCusto = new bootstrap.Modal(document.getElementById('centroCustoModal'));
+    }
+    modalCentroCusto.show();
+}
+
+function handleNovoCentroSubmit(e) {
+    e.preventDefault();
+    const nomeInput = document.getElementById('nomeCentro').value;
+    
+    fetch('/api/centros_custo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: nomeInput })
+    })
+    .then(response => response.json().then(resData => ({ status: response.status, body: resData })))
+    .then(result => {
+        if (result.status === 201) {
+            document.getElementById("form-novo-centro").reset();
+            carregarCentrosCusto();
+        } else {
+            Swal.fire('Erro', result.body.error || 'Erro ao adicionar.', 'error');
+        }
+    });
+}
+
+function editarNomeCentro(id, nomeAtual) {
+    Swal.fire({
+        title: 'Editar Centro de Custo',
+        input: 'text',
+        inputValue: nomeAtual,
+        showCancelButton: true,
+        confirmButtonText: 'Salvar',
+        cancelButtonText: 'Cancelar',
+        inputValidator: (value) => {
+            if (!value) {
+                return 'Você precisa digitar um nome!'
+            }
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const novoNome = result.value;
+            fetch(`/api/centros_custo/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nome: novoNome })
+            })
+            .then(response => response.json().then(resData => ({ status: response.status, body: resData })))
+            .then(res => {
+                if (res.status === 200) {
+                    Swal.fire('Sucesso!', 'Centro de custo atualizado.', 'success');
+                    carregarCentrosCusto();
+                } else {
+                    Swal.fire('Erro', res.body.error || 'Erro ao atualizar.', 'error');
+                }
+            });
+        }
+    });
+}
+
+function excluirCentroCusto(id, nome) {
+    Swal.fire({
+        title: 'Excluir Centro de Custo',
+        text: `Deseja realmente excluir o centro de custo "${nome}"?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        confirmButtonText: 'Sim, Excluir',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`/api/centros_custo/${id}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json().then(resData => ({ status: response.status, body: resData })))
+            .then(res => {
+                if (res.status === 200) {
+                    Swal.fire('Excluído!', 'O centro de custo foi removido.', 'success');
+                    carregarCentrosCusto();
+                } else {
+                    Swal.fire('Erro', res.body.error || 'Erro ao excluir.', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                Swal.fire('Erro Interno', 'Falha na comunicação.', 'error');
+            });
+        }
+    });
+}
+
+

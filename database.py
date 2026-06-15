@@ -38,6 +38,13 @@ def init_db():
         )
     ''')
     
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS centros_custo (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL UNIQUE
+        )
+    ''')
+    
     # Garantir que as colunas existam caso a tabela já estivesse criada
     try:
         cursor.execute('ALTER TABLE compras ADD COLUMN arquivo_nf TEXT')
@@ -64,6 +71,18 @@ def init_db():
                 cursor.execute('INSERT INTO lojas (nome) VALUES (?)', (loja['loja'],))
             except sqlite3.IntegrityError:
                 pass
+                
+    # Migrar centros de custo existentes da tabela compras se a tabela centros_custo estiver vazia
+    cursor.execute('SELECT COUNT(*) FROM centros_custo')
+    if cursor.fetchone()[0] == 0:
+        cursor.execute('SELECT DISTINCT centro_custo FROM compras WHERE centro_custo IS NOT NULL AND centro_custo != ""')
+        centros_existentes = cursor.fetchall()
+        for centro in centros_existentes:
+            try:
+                cursor.execute('INSERT INTO centros_custo (nome) VALUES (?)', (centro['centro_custo'],))
+            except sqlite3.IntegrityError:
+                pass
+
     
     conn.commit()
     conn.close()

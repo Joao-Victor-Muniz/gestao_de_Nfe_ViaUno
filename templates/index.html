@@ -11,14 +11,14 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Favicon -->
-    <link rel="icon" href="/static/img/logo.png" type="image/png">
+    <link rel="icon" href="/static/img/logo branco.png" type="image/png">
 </head>
 <body class="bg-light">
 
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
         <h2 class="text-dark fw-bold" style="color: black !important;">
-            <img src="/static/img/logo.png" style="height: 35px; width: 35px; margin-right: 10px; margin-bottom: 5px; border-radius: 50%;"> 
+            <img src="/static/img/logo branco.png" style="height: 35px; width: 35px; margin-right: 10px; margin-bottom: 5px; border-radius: 50%;"> 
             Gestão de NFs e Boletos
         </h2>
         <div>
@@ -26,6 +26,10 @@
                 <i class="fas fa-file-excel me-1"></i> Importar Planilha
             </button>
             <input type="file" id="file-importar-planilha" accept=".xlsx, .xls, .csv" style="display: none;" onchange="importarPlanilha(event)">
+            
+            <button class="btn btn-outline-info fw-bold shadow-sm me-2" onclick="abrirModalCentroCusto()">
+                <i class="fas fa-list me-1"></i> Centros de Custo
+            </button>
             
             <button class="btn btn-outline-primary fw-bold shadow-sm me-2" onclick="abrirModalEmails()">
                 <i class="fas fa-envelope me-1"></i> Enviar E-mails
@@ -115,7 +119,14 @@
               <div class="row g-3 mb-3">
                   <div class="col-md-8">
                       <label class="form-label fw-bold text-secondary">Centro de Custo</label>
-                      <input type="text" class="form-control" name="centro_custo" required>
+                      <div class="input-group">
+                          <select class="form-select" name="centro_custo" id="select-centro" required>
+                              <option value="">Selecione...</option>
+                          </select>
+                          <button class="btn btn-outline-info fw-bold" type="button" onclick="abrirModalCentroCusto()" title="Gerenciar Centros">
+                              <i class="fas fa-list"></i>
+                          </button>
+                      </div>
                   </div>
                   <div class="col-md-4 d-flex align-items-end">
                       <div class="form-check form-switch mb-2">
@@ -157,6 +168,92 @@
     </div>
   </div>
 </div>
+
+<!-- Modal de Editar Compra -->
+<div class="modal fade" id="editarCompraModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow">
+      <div class="modal-header bg-warning text-dark border-bottom-0">
+        <h5 class="modal-title fw-bold"><i class="fas fa-edit me-2"></i>Editar Compra</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="form-editar-compra">
+          <input type="hidden" id="edit_compra_id" name="id">
+          <div class="modal-body bg-light">
+              <div class="row g-3 mb-3">
+                  <div class="col-md-6">
+                      <label class="form-label fw-bold text-secondary">Data da Compra</label>
+                      <input type="date" class="form-control" name="data_compra" id="edit_data_compra" required>
+                  </div>
+                  <div class="col-md-6">
+                      <label class="form-label fw-bold text-secondary">Valor (R$)</label>
+                      <input type="number" step="0.01" class="form-control" name="valor_compra" id="edit_valor_compra" placeholder="0.00" required>
+                  </div>
+              </div>
+              <div class="mb-3">
+                  <label class="form-label fw-bold text-secondary">Loja / Fornecedor</label>
+                  <div class="input-group">
+                      <select class="form-select" name="loja" id="edit_select_loja" required>
+                          <option value="">Selecione uma Loja...</option>
+                      </select>
+                      <button class="btn btn-outline-warning fw-bold" type="button" onclick="abrirModalNovaLoja()" title="Cadastrar Nova Loja">
+                          <i class="fas fa-plus"></i>
+                      </button>
+                  </div>
+              </div>
+              <div class="row g-3 mb-3">
+                  <div class="col-md-8">
+                      <label class="form-label fw-bold text-secondary">Centro de Custo</label>
+                      <div class="input-group">
+                          <select class="form-select" name="centro_custo" id="edit_centro_custo" required>
+                              <option value="">Selecione...</option>
+                          </select>
+                          <button class="btn btn-outline-info fw-bold" type="button" onclick="abrirModalCentroCusto()" title="Gerenciar Centros">
+                              <i class="fas fa-list"></i>
+                          </button>
+                      </div>
+                  </div>
+                  <div class="col-md-4 d-flex align-items-end">
+                      <div class="form-check form-switch mb-2">
+                          <input class="form-check-input" type="checkbox" id="edit_adtoSwitch" name="adto">
+                          <label class="form-check-label fw-bold text-secondary" for="edit_adtoSwitch">É ADTO?</label>
+                      </div>
+                  </div>
+              </div>
+              <div class="mb-3">
+                  <label class="form-label fw-bold text-secondary">Descrição</label>
+                  <textarea class="form-control" name="descricao" id="edit_descricao" rows="2"></textarea>
+              </div>
+              <div class="row g-3 mb-3">
+                  <div class="col-md-4">
+                      <label class="form-label fw-bold text-secondary">Nº NF (Opcional)</label>
+                      <input type="text" class="form-control form-control-sm" name="numero_nf" id="edit_numero_nf" placeholder="Ex: 12345">
+                  </div>
+                  <div class="col-md-4">
+                      <label class="form-label fw-bold text-secondary">Arquivo NF (Opcional)</label>
+                      <input class="form-control form-control-sm" type="file" name="arquivo_nf" accept=".pdf,image/*">
+                  </div>
+                  <div class="col-md-4">
+                      <label class="form-label fw-bold text-secondary">Arquivo Boleto (Opcional)</label>
+                      <input class="form-control form-control-sm" type="file" name="arquivo_boleto" accept=".pdf,image/*">
+                  </div>
+              </div>
+              <div class="row g-3 mb-3">
+                  <div class="col-md-4">
+                      <label class="form-label fw-bold text-secondary">Vencimento</label>
+                      <input type="date" class="form-control form-control-sm" name="vencimento" id="edit_vencimento">
+                  </div>
+              </div>
+          </div>
+          <div class="modal-footer border-top-0 bg-light">
+            <button type="button" class="btn btn-outline-secondary px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-warning text-dark px-4 fw-bold shadow-sm">Salvar Alterações</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 
 <!-- Modal de Upload NF -->
 <div class="modal fade" id="uploadNfModal" tabindex="-1" aria-labelledby="uploadNfModalLabel" aria-hidden="true">
@@ -225,6 +322,30 @@
             <button type="submit" class="btn btn-sm btn-success fw-bold shadow-sm">Salvar</button>
           </div>
       </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Gerenciar Centro de Custo -->
+<div class="modal fade" id="centroCustoModal" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+  <div class="modal-dialog modal-md modal-dialog-centered">
+    <div class="modal-content shadow">
+      <div class="modal-header bg-info text-white border-bottom-0">
+        <h6 class="modal-title fw-bold"><i class="fas fa-list me-2"></i>Gerenciar Centros de Custo</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body bg-light">
+          <form id="form-novo-centro" class="mb-3 d-flex gap-2">
+              <input type="text" class="form-control form-control-sm" id="nomeCentro" placeholder="Novo Centro de Custo" required>
+              <button type="submit" class="btn btn-sm btn-success fw-bold"><i class="fas fa-plus"></i></button>
+          </form>
+          <ul class="list-group list-group-flush border" id="lista-centros" style="max-height: 200px; overflow-y: auto;">
+              <!-- Centros serão carregados aqui via JS -->
+          </ul>
+      </div>
+      <div class="modal-footer border-top-0 bg-light p-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" data-bs-dismiss="modal">Fechar</button>
+      </div>
     </div>
   </div>
 </div>
